@@ -56,63 +56,18 @@ func init() {
 
 	core.NewItemEffect(CorruptedAshbringer, func(agent core.Agent) {
 		character := agent.GetCharacter()
-
-		// Dynamic proc manager to control proc rate and internal cooldown
-		dpm := character.AutoAttacks.NewDynamicProcManagerForWeaponEffect(CorruptedAshbringer, 1.0, 0)
-
-		// Buff aura with up to 5 stacks, each providing +30 Strength & Agility
-		buffAura := character.GetOrRegisterAura(core.Aura{
-			ActionID: core.ActionID{SpellID: 1231330},
-			Label:    "Corrupted Ashbringer Buff",
-			Duration: time.Second * 10, // Buff lasts 10 sec
-			MaxStacks: 5, // Max 5 stacks
-			OnGain: func(aura *core.Aura, sim *core.Simulation) {
-				aura.SetStacks(sim, 1)
-				character.AddStatDynamic(sim, stats.Strength, 30.0)
-				character.AddStatDynamic(sim, stats.Agility, 30.0)
-			},
-			OnExpire: func(aura *core.Aura, sim *core.Simulation) {
-				// Remove all Strength/Agility when the buff expires
-				character.AddStatDynamic(sim, stats.Strength, -30.0*float64(aura.GetStacks()))
-				character.AddStatDynamic(sim, stats.Agility, -30.0*float64(aura.GetStacks()))
-			},
-		})
-
-		// Proc trigger with 1-second internal cooldown
-		triggerAura := core.MakeProcTriggerAura(&character.Unit, core.ProcTrigger{
-			Name:              "Corrupted Ashbringer Trigger",
-			Callback:          core.CallbackOnSpellHitDealt,
-			Outcome:           core.OutcomeLanded,
-			ProcMask:          core.ProcMaskMelee,
-			ICD:               time.Second * 1, // 1s internal cooldown
-			DPM:               dpm,
-			DPMProcCheck:      core.DPMProc,
+		aura := core.MakeProcTriggerAura(&character.Unit, core.ProcTrigger{
+			Name:       "Corrupted Ashbringer Trigger",
+			Callback:   core.CallbackOnSpellHitDealt,
+			Outcome:    core.OutcomeLanded,
+			ProcMask:   core.ProcMaskMelee,
+			ProcChance: 0.02,
+			ICD:        time.Millisecond * 200,
 			Handler: func(sim *core.Simulation, spell *core.Spell, result *core.SpellResult) {
-				target := result.Target
-				if target == nil {
-					return
-				}
-
-				// Steal 475-525 life from the single target
-				lifeStealAmount := sim.Roll(475, 525)
-				spell.CalcAndDealDamage(sim, target, float64(lifeStealAmount), spell.OutcomeMagicCrit)
-				character.GainHealth(sim, float64(lifeStealAmount), character.NewHealthMetrics(core.ActionID{SpellID: 1231330}))
-
-				// Apply or refresh buff, ensuring it stacks up to 5 times
-				if buffAura.IsActive() {
-					buffAura.Refresh(sim)
-					if buffAura.GetStacks() < 5 {
-						buffAura.AddStack(sim)
-						character.AddStatDynamic(sim, stats.Strength, 30.0)
-						character.AddStatDynamic(sim, stats.Agility, 30.0)
-					}
-				} else {
-					buffAura.Activate(sim)
-				}
+				character.AutoAttacks.ExtraMHAttackProc(sim, 1, core.ActionID{SpellID: 1231330}, spell)
 			},
 		})
-
-		character.ItemSwap.RegisterProc(CorruptedAshbringer, triggerAura)
+		character.ItemSwap.RegisterProc(CorruptedAshbringer, aura)
 	})
         
 
