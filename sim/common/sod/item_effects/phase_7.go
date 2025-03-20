@@ -54,48 +54,58 @@ func init() {
 	//                                 Weapons
 	///////////////////////////////////////////////////////////////////////////
 
-    	core.NewItemEffect(CorruptedAshbringer, func(agent core.Agent) {
-        character := agent.GetCharacter()
-        actionID := core.ActionID{SpellID: 1231330}
+    core.NewItemEffect(CorruptedAshbringer, func(agent core.Agent) {
+	character := agent.GetCharacter()
+	actionID := core.ActionID{SpellID: 1231330}
 
-        aura := core.MakeProcTriggerAura(&character.Unit, core.ProcTrigger{
-            Name:       "Corrupted Ashbringer Effect",
-            Callback:   core.CallbackOnSpellHitDealt,
-            Outcome:    core.OutcomeLanded,
-            ProcMask:   core.ProcMaskMelee,
-            ProcChance: 0.15, // Adjusted proc chance
-            ICD:        time.Millisecond * 1000, // 1s internal cooldown
-            
-            Handler: func(sim *core.Simulation, spell *core.Spell, result *core.SpellResult) {
-                target := result.Target // Always a single target (boss or enemy)
-                if target == nil {
-                    return
-                }
+	healthMetrics := character.NewHealthMetrics(actionID)
 
-                // Steal 475-525 life from the single target
-                lifeStealAmount := sim.Roll(475, 525)
-                spell.CalcAndDealDamage(sim, target, float64(lifeStealAmount), spell.OutcomeMagicCrit)
+	aura := core.MakeProcTriggerAura(&character.Unit, core.ProcTrigger{
+	    Name:       "Corrupted Ashbringer Effect",
+	    Callback:   core.CallbackOnSpellHitDealt,
+	    Outcome:    core.OutcomeLanded,
+	    ProcMask:   core.ProcMaskMelee,
+	    ProcChance: 0.15, // 15% proc chance
+	    ICD:        time.Millisecond * 1000, // 1s internal cooldown
+	    
+	    Handler: func(sim *core.Simulation, spell *core.Spell, result *core.SpellResult) {
+		target := result.Target // Single enemy (Boss or other)
+		if target == nil {
+		    return
+		}
 
-                // Heal the player for the drained amount
-                character.GainHealth(sim, float64(lifeStealAmount), character.HealthMetrics)
+		// Life Drain: 475-525 life stolen
+		lifeStealAmount := sim.Roll(475, 525)
+		spell.CalcAndDealDamage(sim, target, float64(lifeStealAmount), spell.OutcomeMagicCrit)
 
-                // Apply Strength/Agility buff (stacks up to 5 times)
-                buffStacks := character.GetAuraStacks("Corrupted Ashbringer Buff") + 1
-                if buffStacks > 5 {
-                    buffStacks = 5
-                }
+		// Heal player using health metrics
+		character.GainHealth(sim, float64(lifeStealAmount), healthMetrics)
 
-                character.NewTemporaryStatsAura("Corrupted Ashbringer Buff", actionID, 
-                    stats.Stats{
-                        stats.Strength: float64(30 * buffStacks), 
-                        stats.Agility: float64(30 * buffStacks),
-                    }, 
-                    time.Second * 10) // Buff lasts 10 sec, refreshes on new application
-            },
-        })
+		// Apply Strength/Agility buff (stacks up to 5 times)
+		buffAura := character.GetOrRegisterAura(core.Aura{
+		    ActionID: actionID,
+		    Label:    "Corrupted Ashbringer Buff",
+		    Duration: time.Second * 10,
+		    MaxStacks: 5,
+		})
 
-        character.ItemSwap.RegisterProc(CorruptedAshbringer, aura)
-        })
+		if buffAura.IsActive() {
+		    buffAura.Refresh(sim)
+		} else {
+		    buffAura.Activate(sim)
+		}
+
+		if buffAura.GetStacks() < 5 {
+		    buffAura.AddStack(sim)
+		}
+
+		character.AddStatDynamic(sim, stats.Strength, 30.0)
+		character.AddStatDynamic(sim, stats.Agility, 30.0)
+	    },
+	})
+
+	character.ItemSwap.RegisterProc(CorruptedAshbringer, aura)
+    })
         
 
 	// https://www.wowhead.com/classic/item=236341/the-hungering-cold
