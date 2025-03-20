@@ -54,58 +54,66 @@ func init() {
 	//                                 Weapons
 	///////////////////////////////////////////////////////////////////////////
 
-    core.NewItemEffect(CorruptedAshbringer, func(agent core.Agent) {
-	character := agent.GetCharacter()
-	actionID := core.ActionID{SpellID: 1231330}
+	core.NewItemEffect(CorruptedAshbringer, func(agent core.Agent) {
+		character := agent.GetCharacter()
 
-	healthMetrics := character.NewHealthMetrics(actionID)
+		// Dynamic proc manager to control proc rate and internal cooldown
+		dpm := character.AutoAttacks.NewDynamicProcManagerForWeaponEffect(CorruptedAshbringer, 1.0, 0)
 
-	aura := core.MakeProcTriggerAura(&character.Unit, core.ProcTrigger{
-	    Name:       "Corrupted Ashbringer Effect",
-	    Callback:   core.CallbackOnSpellHitDealt,
-	    Outcome:    core.OutcomeLanded,
-	    ProcMask:   core.ProcMaskMelee,
-	    ProcChance: 0.15, // 15% proc chance
-	    ICD:        time.Millisecond * 1000, // 1s internal cooldown
-	    
-	    Handler: func(sim *core.Simulation, spell *core.Spell, result *core.SpellResult) {
-		target := result.Target // Single enemy (Boss or other)
-		if target == nil {
-		    return
-		}
-
-		// Life Drain: 475-525 life stolen
-		lifeStealAmount := sim.Roll(475, 525)
-		spell.CalcAndDealDamage(sim, target, float64(lifeStealAmount), spell.OutcomeMagicCrit)
-
-		// Heal player using health metrics
-		character.GainHealth(sim, float64(lifeStealAmount), healthMetrics)
-
-		// Apply Strength/Agility buff (stacks up to 5 times)
+		// Buff aura with up to 5 stacks, each providing +30 Strength & Agility
 		buffAura := character.GetOrRegisterAura(core.Aura{
-		    ActionID: actionID,
-		    Label:    "Corrupted Ashbringer Buff",
-		    Duration: time.Second * 10,
-		    MaxStacks: 5,
+			ActionID: core.ActionID{SpellID: 1231330},
+			Label:    "Corrupted Ashbringer Buff",
+			Duration: time.Second * 10, // Buff lasts 10 sec
+			MaxStacks: 5, // Max 5 stacks
+			OnGain: func(aura *core.Aura, sim *core.Simulation) {
+				aura.SetStacks(sim, 1)
+				character.AddStatDynamic(sim, stats.Strength, 30.0)
+				character.AddStatDynamic(sim, stats.Agility, 30.0)
+			},
+			OnExpire: func(aura *core.Aura, sim *core.Simulation) {
+				// Remove all Strength/Agility when the buff expires
+				character.AddStatDynamic(sim, stats.Strength, -30.0*float64(aura.GetStacks()))
+				character.AddStatDynamic(sim, stats.Agility, -30.0*float64(aura.GetStacks()))
+			},
 		})
 
-		if buffAura.IsActive() {
-		    buffAura.Refresh(sim)
-		} else {
-		    buffAura.Activate(sim)
-		}
+		// Proc trigger with 1-second internal cooldown
+		triggerAura := core.MakeProcTriggerAura(&character.Unit, core.ProcTrigger{
+			Name:              "Corrupted Ashbringer Trigger",
+			Callback:          core.CallbackOnSpellHitDealt,
+			Outcome:           core.OutcomeLanded,
+			ProcMask:          core.ProcMaskMelee,
+			ICD:               time.Second * 1, // 1s internal cooldown
+			DPM:               dpm,
+			DPMProcCheck:      core.DPMProc,
+			Handler: func(sim *core.Simulation, spell *core.Spell, result *core.SpellResult) {
+				target := result.Target
+				if target == nil {
+					return
+				}
 
-		if buffAura.GetStacks() < 5 {
-		    buffAura.AddStack(sim)
-		}
+				// Steal 475-525 life from the single target
+				lifeStealAmount := sim.Roll(475, 525)
+				spell.CalcAndDealDamage(sim, target, float64(lifeStealAmount), spell.OutcomeMagicCrit)
+				character.GainHealth(sim, float64(lifeStealAmount), character.NewHealthMetrics(core.ActionID{SpellID: 1231330}))
 
-		character.AddStatDynamic(sim, stats.Strength, 30.0)
-		character.AddStatDynamic(sim, stats.Agility, 30.0)
-	    },
+				// Apply or refresh buff, ensuring it stacks up to 5 times
+				if buffAura.IsActive() {
+					buffAura.Refresh(sim)
+					if buffAura.GetStacks() < 5 {
+						buffAura.AddStack(sim)
+						character.AddStatDynamic(sim, stats.Strength, 30.0)
+						character.AddStatDynamic(sim, stats.Agility, 30.0)
+					}
+				} else {
+					buffAura.Activate(sim)
+				}
+			},
+		})
+
+		character.ItemSwap.RegisterProc(CorruptedAshbringer, triggerAura)
 	})
-
-	character.ItemSwap.RegisterProc(CorruptedAshbringer, aura)
-    })
         
 
 	// https://www.wowhead.com/classic/item=236341/the-hungering-cold
