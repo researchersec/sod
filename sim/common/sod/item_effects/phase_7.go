@@ -54,7 +54,7 @@ func init() {
 	//                                 Weapons
 	///////////////////////////////////////////////////////////////////////////
 
-	core.NewItemEffect(CorruptedAshbringer, func(agent core.Agent) {
+    	core.NewItemEffect(CorruptedAshbringer, func(agent core.Agent) {
         character := agent.GetCharacter()
         actionID := core.ActionID{SpellID: 1231330}
 
@@ -63,25 +63,34 @@ func init() {
             Callback:   core.CallbackOnSpellHitDealt,
             Outcome:    core.OutcomeLanded,
             ProcMask:   core.ProcMaskMelee,
-            ProcChance: 0.15, // Adjusted for balance (change if needed)
+            ProcChance: 0.15, // Adjusted proc chance
             ICD:        time.Millisecond * 1000, // 1s internal cooldown
-
+            
             Handler: func(sim *core.Simulation, spell *core.Spell, result *core.SpellResult) {
-                for i := 0; i < 5; i++ { // Up to 5 enemies
-                    target := sim.GetRandomEnemy()
-                    if target != nil {
-                        // Apply life steal effect (475 - 525 damage converted to healing)
-                        lifeStealAmount := sim.Roll(475, 525)
-                        spell.CalcAndDealDamage(sim, target, float64(lifeStealAmount), spell.OutcomeMagicCrit)
-                        character.GainHealth(sim, float64(lifeStealAmount), actionID)
-                        
-                        // Apply Strength/Agility Buff
-                        buffAmount := 30.0
-                        character.AddStatDynamic(sim, stats.Strength, buffAmount)
-                        // Hunter:
-			// character.AddStatDynamic(sim, stats.Agility, buffAmount)
-                    }
+                target := result.Target // Always a single target (boss or enemy)
+                if target == nil {
+                    return
                 }
+
+                // Steal 475-525 life from the single target
+                lifeStealAmount := sim.Roll(475, 525)
+                spell.CalcAndDealDamage(sim, target, float64(lifeStealAmount), spell.OutcomeMagicCrit)
+
+                // Heal the player for the drained amount
+                character.GainHealth(sim, float64(lifeStealAmount), character.HealthMetrics)
+
+                // Apply Strength/Agility buff (stacks up to 5 times)
+                buffStacks := character.GetAuraStacks("Corrupted Ashbringer Buff") + 1
+                if buffStacks > 5 {
+                    buffStacks = 5
+                }
+
+                character.NewTemporaryStatsAura("Corrupted Ashbringer Buff", actionID, 
+                    stats.Stats{
+                        stats.Strength: float64(30 * buffStacks), 
+                        stats.Agility: float64(30 * buffStacks),
+                    }, 
+                    time.Second * 10) // Buff lasts 10 sec, refreshes on new application
             },
         })
 
