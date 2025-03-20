@@ -44,6 +44,7 @@ const (
 	BreastplateOfUndeadWarding   = 236748
 	BladeOfInquisition           = 237512
 	TheHungeringCold             = 236341
+	CorruptedAshbringer 	     = 239301
 )
 
 func init() {
@@ -52,6 +53,41 @@ func init() {
 	///////////////////////////////////////////////////////////////////////////
 	//                                 Weapons
 	///////////////////////////////////////////////////////////////////////////
+
+	core.NewItemEffect(CorruptedAshbringer, func(agent core.Agent) {
+        character := agent.GetCharacter()
+        actionID := core.ActionID{SpellID: 1231330}
+
+        aura := core.MakeProcTriggerAura(&character.Unit, core.ProcTrigger{
+            Name:       "Corrupted Ashbringer Effect",
+            Callback:   core.CallbackOnSpellHitDealt,
+            Outcome:    core.OutcomeLanded,
+            ProcMask:   core.ProcMaskMelee,
+            ProcChance: 0.15, // Adjusted for balance (change if needed)
+            ICD:        time.Millisecond * 1000, // 1s internal cooldown
+
+            Handler: func(sim *core.Simulation, spell *core.Spell, result *core.SpellResult) {
+                for i := 0; i < 5; i++ { // Up to 5 enemies
+                    target := sim.GetRandomEnemy()
+                    if target != nil {
+                        // Apply life steal effect (475 - 525 damage converted to healing)
+                        lifeStealAmount := sim.Roll(475, 525)
+                        spell.CalcAndDealDamage(sim, target, float64(lifeStealAmount), spell.OutcomeMagicCrit)
+                        character.GainHealth(sim, float64(lifeStealAmount), actionID)
+                        
+                        // Apply Strength/Agility Buff
+                        buffAmount := 30.0
+                        character.AddStatDynamic(sim, stats.Strength, buffAmount)
+                        // Hunter:
+			// character.AddStatDynamic(sim, stats.Agility, buffAmount)
+                    }
+                }
+            },
+        })
+
+        character.ItemSwap.RegisterProc(CorruptedAshbringer, aura)
+        })
+        
 
 	// https://www.wowhead.com/classic/item=236341/the-hungering-cold
 	// Equip: Gives you a 2% chance to get an extra attack on the same target after dealing damage with your weapon.
