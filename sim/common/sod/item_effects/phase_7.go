@@ -56,18 +56,25 @@ func init() {
 
 	core.NewItemEffect(CorruptedAshbringer, func(agent core.Agent) {
 		character := agent.GetCharacter()
-		aura := core.MakeProcTriggerAura(&character.Unit, core.ProcTrigger{
-			Name:       "Corrupted Ashbringer Trigger",
-			Callback:   core.CallbackOnSpellHitDealt,
-			Outcome:    core.OutcomeLanded,
-			ProcMask:   core.ProcMaskMelee,
-			ProcChance: 0.02,
-			ICD:        time.Millisecond * 200,
+
+		dpm := character.AutoAttacks.NewDynamicProcManagerForWeaponEffect(CorruptedAshbringer, 1.0, 0)
+
+		buffAura := character.NewTemporaryStatsAura("Consumption", core.ActionID{SpellID: 1231330}, stats.Stats{stats.Strength: 30}, time.Second*15)
+
+		triggerAura := core.MakeProcTriggerAura(&character.Unit, core.ProcTrigger{
+			Name:              "Corrupted Ashbringer Trigger",
+			Callback:          core.CallbackOnSpellHitDealt,
+			Outcome:           core.OutcomeLanded,
+			SpellFlagsExclude: core.SpellFlagSuppressEquipProcs,
+			ICD:               time.Second * 15,
+			DPM:               dpm,
+			DPMProcCheck:      core.DPMProc,
 			Handler: func(sim *core.Simulation, spell *core.Spell, result *core.SpellResult) {
-				character.AutoAttacks.ExtraMHAttackProc(sim, 1, core.ActionID{SpellID: 1231330}, spell)
+				buffAura.Activate(sim)
 			},
 		})
-		character.ItemSwap.RegisterProc(CorruptedAshbringer, aura)
+
+		character.ItemSwap.RegisterProc(CorruptedAshbringer, triggerAura)
 	})
         
 
