@@ -59,7 +59,7 @@ func init() {
 
 		dpm := character.AutoAttacks.NewDynamicProcManagerForWeaponEffect(CorruptedAshbringer, 1.0, 0)
 
-		buffAura := character.NewTemporaryStatsAura("Consumption", core.ActionID{SpellID: 1231330}, stats.Stats{stats.Strength: 30}, time.Second*15)
+		buffAura := character.NewTemporaryStatsAura("Consumption", core.ActionID{SpellID: 1231330}, stats.Stats{stats.Agility: 30}, time.Second*15)
 
 		triggerAura := core.MakeProcTriggerAura(&character.Unit, core.ProcTrigger{
 			Name:              "Corrupted Ashbringer Trigger",
