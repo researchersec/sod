@@ -9,7 +9,6 @@ This project is licensed with MIT license. We request that anyone using this sof
 [Support our devs via Patreon.](https://www.patreon.com/wowsims)
 
 # Downloading Sim
-
 Links for latest Sim build:
 - [Windows Sim](https://github.com/wowsims/sod/releases/latest/download/wowsimsod-windows.exe.zip)
 - [MacOS Sim](https://github.com/wowsims/sod/releases/latest/download/wowsimsod-amd64-darwin.zip)
